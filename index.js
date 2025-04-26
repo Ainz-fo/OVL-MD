@@ -5,7 +5,6 @@ const axios = require("axios");
 const { exec } = require("child_process");
 const { default: makeWASocket, useMultiFileAuthState, logger, delay, makeCacheableSignalKeyStore, jidDecode, getContentType, downloadContentFromMessage, makeInMemoryStore, fetchLatestBaileysVersion, DisconnectReason } = require("ovl_wa_baileys");
 const config = require("./set");
-const session = config.SESSION_ID || "";
 let evt = require(__dirname + "/framework/ovlcmd");
 const FileType = require('file-type')
 const prefixe = config.PREFIXE;
@@ -19,9 +18,12 @@ const { Ranks } = require('./DataBase/rank');
 const { Sudo } = require('./DataBase/sudo');
 const { getMessage, addMessage } = require('./framework/store');
 const { WA_CONF } = require('./DataBase/wa_conf');
+const sessions = config.SESSION_ID || "";
+const sessionIds = sessions.split(";").map(id => id.trim()).filter(id => id !== "");
 
- async function ovlAuth(session) {
-    let sessionId;
+
+async function main(session) {
+let sessionId;
     try {
         if (session.startsWith("Ovl-MD_") && session.endsWith("_SESSION-ID")) {
             sessionId = session.slice(7, -11);
@@ -33,10 +35,8 @@ const { WA_CONF } = require('./DataBase/wa_conf');
     } catch (e) {
         console.log("Session invalide: " + e.message || e);
     }
- }
-ovlAuth(session);
 
-async function main() {
+
     const { version, isLatest } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth'));
         try {
@@ -795,8 +795,9 @@ ovl.ev.on("connection.update", async (con) => {
         console.error("Erreur principale:", error);
     }
 }
-
-main();
+for (const id of sessionIds) {
+    main(id);
+}
 
 const express = require('express');
 const app = express();
