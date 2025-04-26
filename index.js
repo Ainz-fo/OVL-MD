@@ -22,50 +22,54 @@ const sessions = config.SESSION_ID || "";
 const sessionIds = sessions.split(";").map(id => id.trim()).filter(id => id !== "");
 
 
-async function main(session) {
-let sessionId;
+async function main(session, index) {
+    let sessionId;
     try {
         if (session.startsWith("Ovl-MD_") && session.endsWith("_SESSION-ID")) {
             sessionId = session.slice(7, -11);
+        } else {
+            throw new Error("Session format invalide");
         }
+        const authFolder = path.join(__dirname, 'auth', `session_${index}`);
+        if (!fs.existsSync(authFolder)) {
+            fs.mkdirSync(authFolder, { recursive: true });
+        }
+
         const response = await axios.get('https://pastebin.com/raw/' + sessionId);
         const data = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        const filePath = path.join(__dirname, 'auth', 'creds.json');
-            await fs.writeFileSync(filePath, data, 'utf8');
-    } catch (e) {
-        console.log("Session invalide: " + e.message || e);
-    }
+        const filePath = path.join(authFolder, 'creds.json');
+        await fs.writeFileSync(filePath, data, 'utf8');
 
+        const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+        const { version, isLatest } = await fetchLatestBaileysVersion();
+        
+        const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) });
 
-    const { version, isLatest } = await fetchLatestBaileysVersion();
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'auth'));
-        try {
-        const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store"
-  })
-});
-         const ovl = makeWASocket({
+        const ovl = makeWASocket({
             printQRInTerminal: true,
             logger: pino({ level: "silent" }),
-            browser: [ "Ubuntu", "Chrome", "20.0.04" ],
+            browser: ["Ubuntu", "Chrome", "20.0.04"],
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
             auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }).child({ level: "silent" }))
-        },
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }).child({ level: "silent" }))
+            },
             getMessage: async (key) => {
-                    const msg = await store.loadMessage(key.remoteJid, key.id);
-                    return msg.message;
-           }
+                const msg = await store.loadMessage(key.remoteJid, key.id);
+                return msg?.message;
+            }
         });
-store.bind(ovl.ev);
-ovl.ev.on("messages.upsert", async (m) => {
+
+        store.bind(ovl.ev);
+
+        ovl.ev.on("messages.upsert", async (m) => {
     if (m.type !== 'notify') return;
 
     const { messages } = m;
     const ms = messages[0];
     if (!ms.message) return;
- addMessage(ms.key.id, ms);
+    addMessage(ms.key.id, ms);
 
     const decodeJid = (jid) => {
         if (!jid) return jid;
@@ -795,8 +799,8 @@ ovl.ev.on("connection.update", async (con) => {
         console.error("Erreur principale:", error);
     }
 }
-for (const id of sessionIds) {
-    main(id);
+for (let i = 0; i < sessionIds.length; i++) {
+    main(sessionIds[i], i + 1);
 }
 
 const express = require('express');
