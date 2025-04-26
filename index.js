@@ -800,7 +800,7 @@ ovl.ev.on("connection.update", async (con) => {
     }
 }
 for (let i = 0; i < sessionIds.length; i++) {
-    main(sessionIds[i], i + 1);
+    main(sessionIds[i], i);
 }
 
 const express = require('express');
